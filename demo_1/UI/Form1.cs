@@ -1,35 +1,34 @@
 ﻿using demo_1.BLL.DTO;
 using demo_1.BLL.Interfaces;
 using demo_1.DAL.Entity;
+using demo_1.BLL.Implements;
+using demo_1.DAL.Contexts;
 using System.ComponentModel;
 
 namespace demo_1
 {
     public partial class Form1 : Form
     {
+        private decimal _tongTienNhapTam = 0;
         private NguoiDung _currentUser;
         private readonly ISachRepository _sachService;
-        private readonly IPhieuNhapRepository _phieuNhapService;
         private readonly BindingSource _bs = new BindingSource();
         private string _selectedMaSach;
+        private readonly HoaDonService _hoaDonService;
 
-        // selected category id for LoaiSach tab
         private string _selectedMaLoaiSach;
         private readonly BindingSource _bsLoai = new BindingSource();
 
         private List<ChiTietHoaDonDTO> _giỏHàng = new List<ChiTietHoaDonDTO>();
         private BindingSource _bsGiỏHàng = new BindingSource();
 
-        private BindingList<ChiTietPhieuNhapDTO> _tempPhieuNhap = new BindingList<ChiTietPhieuNhapDTO>();
-
-        // PHẢI CÓ (NguoiDung user) ở đây
+        private readonly thongKeService _tkService = new thongKeService();
         public Form1(NguoiDung user)
         {
             InitializeComponent(); // Để trống ngoặc này, không điền gì vào đây
 
             // Khởi tạo service
             _sachService = new SachService();
-            _phieuNhapService = new PhieuNhapService();
 
             // Setup binding cho sách
             LoaddataSach.DataSource = _bs;
@@ -42,20 +41,32 @@ namespace demo_1
             LoaddataType.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             LoaddataType.MultiSelect = false;
             LoaddataType.SelectionChanged += LoaddataType_SelectionChanged;
-
+            _hoaDonService = new HoaDonService();
             // Gán user từ tham số vào biến private của class
             _currentUser = user;
             ApplyPhanQuyen();
 
-            // Load dữ liệu
-            _ = LoadSachAsync();
-            _ = LoadLoaiSachAsync();
-            _ = FillComboSachHD();
-            dgvPhieuNhap.DataSource = _tempPhieuNhap;
+            LoadDataSequentially();
+
 
         }
-
-
+        private async void Form1_Load(object sender, EventArgs e)
+        {
+            await LoadLichSuHoaDon();
+        }
+        private async void LoadDataSequentially()
+        {
+            try
+            {
+                await LoadSachAsync();      // Đợi load sách xong
+                await LoadLoaiSachAsync();  // Rồi mới load loại sách
+                await FillComboSachHD();    // Rồi mới điền combo
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Lỗi khởi tạo: " + ex.Message);
+            }
+        }
         private void ApplyPhanQuyen()
         {
             this.Text = $"Nhà Sách - {_currentUser.HoTen} ({_currentUser.VaiTro})";
@@ -76,7 +87,7 @@ namespace demo_1
                 case "NhanVien":
                     if (tabControl1.TabPages.Contains(tabPage1)) tabControl1.TabPages.Remove(tabPage1);
                     if (tabControl1.TabPages.Contains(tabPage2)) tabControl1.TabPages.Remove(tabPage2);
-                    if (tabControl1.TabPages.Contains(tabPage4)) tabControl1.TabPages.Remove(tabPage4);
+
                     if (tabControl1.TabPages.Contains(tabPage5)) tabControl1.TabPages.Remove(tabPage5);
                     if (tabControl1.TabPages.Contains(tabPage6)) tabControl1.TabPages.Remove(tabPage6);
 
@@ -122,76 +133,50 @@ namespace demo_1
         /// </summary>
         private async Task LoadLoaiSachAsync()
         {
-            try
-            {
-                using var db = new NhaSachContext();
-                var types = await Task.Run(() => db.LoaiSachs.OrderBy(x => x.TenLoaiSach).ToList());
+            using var db = new NhaSachContext();
+            // Lấy nguyên danh sách Object LoaiSach từ DB
+            var types = await Task.Run(() => db.LoaiSachs.OrderBy(x => x.TenLoaiSach).ToList());
 
-                // populate combo used by book tab
-                cboLoaiSach.DisplayMember = "TenLoaiSach";
-                cboLoaiSach.ValueMember = "MaLoaiSach";
-                cboLoaiSach.DataSource = types;
+            cboLoaiSach.DataSource = types;
+            cboLoaiSach.DisplayMember = "TenLoaiSach";
+            cboLoaiSach.ValueMember = "MaLoaiSach";
 
-                // populate category grid on tab
-                _bsLoai.DataSource = types.Select(t => new { t.MaLoaiSach, t.TenLoaiSach }).ToList();
-                LoaddataType.AutoGenerateColumns = true;
-
-                if (LoaddataType.Columns.Contains("MaLoaiSach"))
-                    LoaddataType.Columns["MaLoaiSach"].Visible = false;
-                if (LoaddataType.Columns.Contains("TenLoaiSach"))
-                    LoaddataType.Columns["TenLoaiSach"].HeaderText = "Tên loại sách";
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Lỗi tải loại sách: " + ex.Message);
-            }
+            // Gán trực tiếp list object cho BindingSource
+            _bsLoai.DataSource = types;
+            LoaddataType.DataSource = _bsLoai;
         }
 
         private void LoaddataSach_SelectionChanged(object sender, EventArgs e)
         {
             if (LoaddataSach.CurrentRow?.DataBoundItem is SachDTO dto)
             {
+                // 1. Gán ID sách đang chọn vào biến toàn cục
                 _selectedMaSach = dto.MaSach;
+
+                // 2. Đổ dữ liệu lên các ô nhập liệu
                 txtTenSach.Text = dto.TenSach;
                 txtTacGia.Text = dto.TacGia;
-                nudSoLuong.Value = Math.Max(0, dto.SoLuong);
+                nudSoLuong.Value = dto.SoLuong;
                 txtGiaBan.Value = dto.GiaBan;
+                cboLoaiSach.SelectedValue = dto.MaLoaiSach;
 
-                // select combo by MaLoaiSach if available
-                if (!string.IsNullOrEmpty(dto.MaLoaiSach))
-                {
-                    cboLoaiSach.SelectedValue = dto.MaLoaiSach;
-                }
-                else if (!string.IsNullOrEmpty(dto.TenLoaiSach))
-                {
-                    for (int i = 0; i < cboLoaiSach.Items.Count; i++)
-                    {
-                        if (cboLoaiSach.Items[i] is LoaiSach ls && ls.TenLoaiSach == dto.TenLoaiSach)
-                        {
-                            cboLoaiSach.SelectedIndex = i;
-                            break;
-                        }
-                    }
-                }
+                // 3. Bật các nút chức năng
+                btnSua.Enabled = true;
+                btnXoa.Enabled = true;
+            }
+            else
+            {
+                btnSua.Enabled = false;
+                btnXoa.Enabled = false;
             }
         }
 
         private void LoaddataType_SelectionChanged(object sender, EventArgs e)
         {
-            // Selection uses anonymous type with MaLoaiSach and TenLoaiSach
-            var row = LoaddataType.CurrentRow;
-            if (row?.DataBoundItem != null)
+            if (LoaddataType.CurrentRow?.DataBoundItem is LoaiSach ls)
             {
-                var item = row.DataBoundItem;
-                var ma = item.GetType().GetProperty("MaLoaiSach")?.GetValue(item) as string;
-                var ten = item.GetType().GetProperty("TenLoaiSach")?.GetValue(item) as string;
-                _selectedMaLoaiSach = ma;
-                textBox3.Text = ten ?? string.Empty;
-            }
-            else
-            {
-                _selectedMaLoaiSach = null;
-                textBox3.Text = string.Empty;
+                _selectedMaLoaiSach = ls.MaLoaiSach;
+                textBox3.Text = ls.TenLoaiSach;
             }
         }
 
@@ -443,38 +428,12 @@ namespace demo_1
 
         }
 
-        private void label13_Click(object sender, EventArgs e)
-        {
-            // 1. Lấy dữ liệu từ giao diện (như trong ảnh bạn chụp)
-            var tenSach = cboSachPN.Text; // ComboBox tên sách
-            int soLuong = (int)numSoLuong.Value;
-            decimal giaNhap = numGiaTien.Value;
 
-            // 2. Thêm vào một List tạm hoặc BindingSource hiển thị lên Grid
-            // Sau đó mới bấm nút LƯU để đẩy vào Database
-        }
 
-        private async void btnPN_Them_Click(object sender, EventArgs e)
-        {
-            if (cboSachPN.SelectedValue == null)
-            {
-                MessageBox.Show("Vui lòng chọn một cuốn sách từ danh sách!");
-                return;
-            }
-
-            var item = new ChiTietPhieuNhapDTO
-            {
-                MaSach = cboSachPN.SelectedValue.ToString(),
-                TenSach = cboSachPN.Text,
-                SoLuong = (int)numSoLuong.Value,
-                gia_nhap = numGiaTien.Value // Đảm bảo tên thuộc tính khớp với DTO (GiaNhap)
-            };
-            _tempPhieuNhap.Add(item);
-        }
         public async Task<bool> LuuHoaDonAsync(HoaDon hd, List<ChiTietHoaDonDTO> chiTiets)
         {
             // 1. Khởi tạo Repository (Đảm bảo file HoaDonRepository.cs của bạn đã được lưu)
-            var hoaDonRepo = new demo_1.DAO.HoaDonRepository();
+            var hoaDonRepo = new demo_1.DAL.DAO.HoaDonRepository();
 
             // 2. Chuyển đổi từ DTO (dùng cho Grid) sang Entity (dùng cho Database)
             var listEntities = chiTiets.Select(x => new ChiTietHoaDon
@@ -489,18 +448,8 @@ namespace demo_1
             return await hoaDonRepo.SaveHoaDonTransaction(hd, listEntities);
         }
 
-        private void btnPN_Sua_Click(object sender, EventArgs e)
-        {
 
-        }
 
-        private void btnPN_Xoa_Click(object sender, EventArgs e)
-        {
-            if (dgvPhieuNhap.CurrentRow != null)
-            {
-                _tempPhieuNhap.RemoveAt(dgvPhieuNhap.CurrentRow.Index);
-            }
-        }
 
         private void NBGia_tien_ValueChanged(object sender, EventArgs e)
         {
@@ -553,22 +502,30 @@ namespace demo_1
 
         private async void BtnHD_Sua_Click(object sender, EventArgs e)
         {
-            if (string.IsNullOrEmpty(_selectedMaSach)) return;
-
-            try
+            if (gio_hang.CurrentRow?.DataBoundItem is ChiTietHoaDonDTO selectedItem)
             {
-                var dto = ReadDtoFromInputs();
-                var ok = await _sachService.Update(dto);
+                int newQty = (int)So_lương.Value;
 
-                if (ok)
+                // Kiểm tra tồn kho thực tế của sách này (Lấy từ nguồn dữ liệu sách)
+                // Bạn nên bổ sung kiểm tra nếu newQty > số lượng tồn kho
+
+                if (newQty <= 0)
                 {
-                    await LoadSachAsync(); // Tải lại danh sách sau khi sửa
-                    MessageBox.Show("Cập nhật thành công!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("Số lượng phải lớn hơn 0");
+                    return;
                 }
+
+                selectedItem.SoLuong = newQty;
+
+                // QUAN TRỌNG: Làm mới Binding để Grid hiển thị số mới và ThanhTien mới
+                _bsGiỏHàng.ResetBindings(false);
+
+                UpdateGioHangGrid(); // Tính lại tổng tiền Label
+                MessageBox.Show("Đã cập nhật số lượng!");
             }
-            catch (Exception ex)
+            else
             {
-                MessageBox.Show("Lỗi: " + ex.Message);
+                MessageBox.Show("Vui lòng chọn một dòng trong giỏ hàng!");
             }
         }
 
@@ -620,7 +577,7 @@ namespace demo_1
 
         }
 
-        private void btn__Click(object sender, EventArgs e)
+        private async void btn__Click(object sender, EventArgs e)
         {
             if (!_giỏHàng.Any())
             {
@@ -628,14 +585,20 @@ namespace demo_1
                 return;
             }
 
-            // Mở Form khách hàng và truyền danh sách giỏ hàng sang
             khách_hàng frmKH = new khách_hàng(_giỏHàng);
             if (frmKH.ShowDialog() == DialogResult.OK)
             {
-                // Nếu thanh toán thành công, xóa giỏ hàng và load lại kho
+                // 1. Xóa giỏ hàng cũ
                 _giỏHàng.Clear();
                 UpdateGioHangGrid();
-                _ = LoadSachAsync();
+
+                // 2. Cập nhật lại kho sách (vì vừa bán mất một ít)
+                await LoadSachAsync();
+
+                // 3. QUAN TRỌNG: Load lại danh sách hóa đơn để thấy dòng mới vừa lưu
+                await LoadLichSuHoaDon();
+
+                MessageBox.Show("Thanh toán thành công!");
             }
         }
         private async Task FillComboSachHD()
@@ -674,28 +637,7 @@ namespace demo_1
 
         private void gio_hang_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
-            bool hasSelection = LoaddataSach.CurrentRow != null;
 
-            // 1. Kích hoạt hoặc vô hiệu hóa nút
-            btnSua.Enabled = hasSelection;
-            btnXoa.Enabled = hasSelection;
-
-            // 2. Đổ dữ liệu từ dòng được chọn lên các TextBox/NumericUpDown
-            if (hasSelection && LoaddataSach.CurrentRow.DataBoundItem is SachDTO dto)
-            {
-                _selectedMaSach = dto.MaSach;
-                txtTenSach.Text = dto.TenSach;
-                txtTacGia.Text = dto.TacGia;
-                nudSoLuong.Value = dto.SoLuong;
-
-                // Hiển thị giá lên TextBox hoặc NumericUpDown
-                txtGiaBan.Value = dto.GiaBan;
-
-                // 3. Hiển thị giá tiền có đơn vị nghìn lên Label
-                // Ví dụ: lblGiaHienThi.Text = dto.GiaBan.ToString("N0") + " VNĐ";
-                // Cách khác nếu bạn muốn tự thêm 3 số 0 thủ công (không khuyến khích): 
-                // lblGiaHienThi.Text = (dto.GiaBan).ToString() + ".000 VNĐ";
-            }
         }
 
         private void txtGiaBan_ValueChanged(object sender, EventArgs e)
@@ -722,52 +664,145 @@ namespace demo_1
             }
         }
 
-        private async void btnPN_Luu_Click(object sender, EventArgs e)
+
+
+        private void textBox1_TextChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void dgvPhieuNhap_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        {
+
+        }
+        private async Task LoadLichSuHoaDon()
         {
             try
             {
-                using var db = new NhaSachContext();
-                using var transaction = await db.Database.BeginTransactionAsync();
+                // Gọi Service lấy dữ liệu
+                var data = await _hoaDonService.GetHoaDonsAsync();
 
-                // 1. Tạo Phiếu Nhập mới
-                var pn = new PhieuNhap
-                {
-                    ma_phieu_nhap = Guid.NewGuid().ToString(),
-                    ngay_lap_phieu_nhap = dtpNgayLapPN.Value
-                };
-                db.PhieuNhaps.Add(pn);
+                // Gán dữ liệu vào Grid của Tab Lịch sử hóa đơn
+                dgvLichSuHoaDon.DataSource = data;
 
-                foreach (var item in _tempPhieuNhap)
-                {
-                    // 2. Thêm Chi tiết Phiếu Nhập (để sau này Thống kê giá nhập)
-                    var ct = new ChiTietPhieuNhap
-                    {
-                        ma_phieu_nhap = pn.ma_phieu_nhap,
-                        ma_sach = item.MaSach,
-                        so_luong = item.SoLuong,
-                        gia_nhap = item.gia_nhap // Lưu để tính lãi sau này
-                    };
-                    db.ChiTietPhieuNhaps.Add(ct);
+                // Cấu hình tiêu đề cột cho người dùng dễ đọc
+                dgvLichSuHoaDon.Columns["MaHoaDon"].HeaderText = "Mã HĐ";
+                dgvLichSuHoaDon.Columns["TenKhachHang"].HeaderText = "Khách Hàng";
+                dgvLichSuHoaDon.Columns["SoDienThoai"].HeaderText = "SĐT";
+                dgvLichSuHoaDon.Columns["NgayLap"].HeaderText = "Thời Gian";
+                dgvLichSuHoaDon.Columns["TongThanhToan"].HeaderText = "Tổng Tiền";
+                dgvLichSuHoaDon.Columns["GhiChuSach"].HeaderText = "Sách Đã Mua";
 
-                    // 3. Cập nhật bảng Sách (Tăng số lượng kho)
-                    var sach = await db.Sachs.FindAsync(item.MaSach);
-                    if (sach != null)
-                    {
-                        sach.SoLuong += item.SoLuong; // Cập nhật tồn kho
-                                                      // Nếu muốn cập nhật luôn tác giả/tên từ phiếu nhập:
-                                                      // sach.TenSach = item.TenSach; 
-                    }
-                }
-
-                await db.SaveChangesAsync();
-                await transaction.CommitAsync();
-
-                _tempPhieuNhap.Clear(); // Xóa sạch grid sau khi lưu thành công
-                MessageBox.Show("Nhập kho thành công và đã cập nhật số lượng sách!");
+                // Cho phép cột Sách Đã Mua hiển thị dài hơn
+                dgvLichSuHoaDon.Columns["GhiChuSach"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Lỗi khi lưu: " + ex.Message);
+                MessageBox.Show("Lỗi tải lịch sử: " + ex.Message);
+            }
+        }
+
+        private async void btnType_Them_Click_1(object sender, EventArgs e)
+        {
+            string tenLoai = textBox3.Text.Trim();
+            if (string.IsNullOrEmpty(tenLoai))
+            {
+                MessageBox.Show("Vui lòng nhập tên loại sách!");
+                return;
+            }
+
+            using var db = new NhaSachContext();
+            var loaiMoi = new LoaiSach
+            {
+                MaLoaiSach = Guid.NewGuid().ToString(), // Tạo mã mới
+                TenLoaiSach = tenLoai
+            };
+
+            db.LoaiSachs.Add(loaiMoi);
+            await db.SaveChangesAsync();
+
+            await LoadLoaiSachAsync(); // Tải lại lưới
+            textBox3.Clear();
+            MessageBox.Show("Thêm loại sách thành công!");
+        }
+
+        private async void btnType_Sua_Click_1(object sender, EventArgs e)
+        {
+            if (string.IsNullOrEmpty(_selectedMaLoaiSach))
+            {
+                MessageBox.Show("Vui lòng chọn loại sách cần sửa từ danh sách!");
+                return;
+            }
+
+            using var db = new NhaSachContext();
+            var loai = await db.LoaiSachs.FindAsync(_selectedMaLoaiSach);
+
+            if (loai != null)
+            {
+                loai.TenLoaiSach = textBox3.Text.Trim();
+                await db.SaveChangesAsync();
+                await LoadLoaiSachAsync();
+                MessageBox.Show("Cập nhật thành công!");
+            }
+        }
+
+        private async void btnType_Xoa_Click_1(object sender, EventArgs e)
+        {
+            if (string.IsNullOrEmpty(_selectedMaLoaiSach))
+            {
+                MessageBox.Show("Vui lòng chọn loại sách cần xóa!");
+                return;
+            }
+
+            var confirm = MessageBox.Show("Bạn có chắc chắn muốn xóa? Lưu ý: Nếu có sách thuộc loại này, việc xóa sẽ bị lỗi.",
+                                        "Xác nhận", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+            if (confirm == DialogResult.Yes)
+            {
+                try
+                {
+                    using var db = new NhaSachContext();
+                    var loai = await db.LoaiSachs.FindAsync(_selectedMaLoaiSach);
+                    if (loai != null)
+                    {
+                        db.LoaiSachs.Remove(loai);
+                        await db.SaveChangesAsync();
+                        await LoadLoaiSachAsync();
+                        MessageBox.Show("Xóa thành công!");
+                    }
+                }
+                catch (Exception)
+                {
+                    MessageBox.Show("Không thể xóa loại sách này vì đang có sách thuộc danh mục này!");
+                }
+            }
+        }
+
+        private void panel4_Paint(object sender, PaintEventArgs e)
+        {
+
+        }
+
+        private async void btnThốngKê_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                DateTime ngayChon = dtpNgayThongKe.Value;
+
+                // SỬA TẠI ĐÂY: Gọi _tkService thay vì _hoaDonService
+                var data = await _tkService.GetThongKeByDateAsync(ngayChon);
+
+                // Gán dữ liệu lên UI
+                lblTongDoanhThu.Text = $"Tổng doanh thu: {data.TongDoanhThu:N0} VNĐ";
+                lblTongSoHD.Text = $"Tổng số hóa đơn: {data.TongSoHoaDon}";
+                lblTongSachBan.Text = $"Tổng số sách đã bán: {data.TongSoSachDaBan}";
+
+                dgvTopSach.DataSource = data.TopSachBanChay;
+                dgvSachSapHet.DataSource = data.SachSapHet;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Lỗi: " + ex.Message);
             }
         }
     }

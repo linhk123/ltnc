@@ -11,8 +11,7 @@ namespace demo_1.DAL.Contexts
         public DbSet<Sach> Sachs { get; set; }
         public DbSet<HoaDon> HoaDons { get; set; }
         public DbSet<ChiTietHoaDon> ChiTietHoaDons { get; set; }
-        public DbSet<PhieuNhap> PhieuNhaps { get; set; }
-        public DbSet<ChiTietPhieuNhap> ChiTietPhieuNhaps { get; set; }
+
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -26,9 +25,7 @@ namespace demo_1.DAL.Contexts
             modelBuilder.Entity<ChiTietHoaDon>()
                 .HasKey(x => new { x.ma_hoa_don, x.ma_sach });
 
-            modelBuilder.Entity<ChiTietPhieuNhap>()
-                .HasKey(x => new { x.ma_phieu_nhap, x.ma_sach });
-
+           
             base.OnModelCreating(modelBuilder);
         }
     }

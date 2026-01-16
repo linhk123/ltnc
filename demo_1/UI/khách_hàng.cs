@@ -1,7 +1,7 @@
 ﻿using demo_1.BLL.DTO;
 using demo_1.BLL.Interfaces;
-using demo_1.Entity;
-using demo_1.Implements;
+using demo_1.DAL.Entity;
+using demo_1.BLL.Implements;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;

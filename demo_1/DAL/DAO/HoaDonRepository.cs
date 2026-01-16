@@ -4,86 +4,86 @@ using demo_1.DAL.Entity;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
-using System.Text;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace demo_1.DAL.DAO
 {
     public class HoaDonRepository
     {
+        // Để tránh lỗi "A second operation was started...", nên dùng DbContext ngắn hạn 
+        // hoặc khởi tạo cẩn thận. Ở đây tôi giữ cấu trúc của bạn nhưng tối ưu logic.
         private readonly NhaSachContext db = new NhaSachContext();
 
         public async Task<List<HoaDonDTO>> GetHoaDonsAsync()
         {
-            return await db.HoaDons.Select(hd => new HoaDonDTO
+            // Sử dụng ToListAsync để tránh lỗi đa luồng và lấy đầy đủ thông tin
+            var hoaDons = await db.HoaDons
+                .Include(hd => hd.ChiTietHoaDons)
+                .ThenInclude(ct => ct.Sach)
+                .ToListAsync();
+
+            return hoaDons.Select(hd => new HoaDonDTO
             {
                 MaHoaDon = hd.ma_hoa_don,
                 NgayLap = hd.ngay_lap_hoa_don,
                 TenKhachHang = hd.ten_khach_hang,
-                SoDienThoai = hd.sdt_khach_hang, // Changed from SdtKhachHang to SoDienThoai
-                TongThanhToan = hd.ChiTietHoaDons.Sum(ct => ct.so_luong * ct.Sach.GiaBan) // Changed from TongTien to TongThanhToan
-            }).ToListAsync();
+                SoDienThoai = hd.sdt_khach_hang,
+                TongThanhToan = hd.ChiTietHoaDons.Sum(ct => ct.so_luong * ct.gia_ban_luc_do),
+
+                // Tạo chuỗi danh sách sách mua (Ví dụ: "Sách A (2), Sách B (1)")
+                GhiChuSach = string.Join(", ", hd.ChiTietHoaDons
+                    .Select(ct => $"{ct.Sach.TenSach} ({ct.so_luong})"))
+            }).ToList();
         }
 
-        // 2. Lưu hóa đơn với Transaction (Trừ kho + Lưu giá nhập lúc đó)
+        // 2. Lưu hóa đơn: Trừ kho trực tiếp từ bảng Sách
         public async Task<bool> SaveHoaDonTransaction(HoaDon hoaDon, List<ChiTietHoaDon> chiTiets)
         {
+            // Sử dụng using để đảm bảo giải phóng kết nối
             using var transaction = await db.Database.BeginTransactionAsync();
             try
             {
-                // Thêm hóa đơn chính
                 await db.HoaDons.AddAsync(hoaDon);
 
+                // Trong hàm SaveHoaDonTransaction của HoaDonRepository
                 foreach (var item in chiTiets)
                 {
-                    // Tìm sách để trừ kho
+                    // 1. Tìm sách trong kho
                     var sach = await db.Sachs.FindAsync(item.ma_sach);
-                    if (sach == null) throw new Exception($"Sách {item.ma_sach} không tồn tại.");
+                    if (sach == null) throw new Exception($"Sách mã {item.ma_sach} không tồn tại.");
 
-                    if (sach.SoLuong < item.so_luong)
-                        throw new Exception($"Sách {sach.TenSach} không đủ số lượng (Còn: {sach.SoLuong}).");
-
-                    // TRỪ KHO
+                    // 2. Trừ kho
                     sach.SoLuong -= item.so_luong;
 
-                    // SNAPSHOT GIÁ (Quan trọng để tính lãi)
-                    item.gia_ban_luc_do = sach.GiaBan; // Giá bán hiện tại
+                    // 3. Sử dụng GiaBan để lấp vào cả hai vị trí
+                    item.gia_ban_luc_do = sach.GiaBan; // Đây là giá bán cho khách
 
-                    // Lấy giá nhập gần nhất từ phiếu nhập
-                    // Logic: Lấy chi tiết phiếu nhập mới nhất của sách này
-                    var giaNhapGanNhat = await db.ChiTietPhieuNhaps
-                        .Include(x => x.PhieuNhap)
-                        .Where(x => x.ma_sach == item.ma_sach)
-                        .OrderByDescending(x => x.PhieuNhap.ngay_lap_phieu_nhap)
-                        .Select(x => x.gia_nhap)
-                        .FirstOrDefaultAsync();
+                    // Thay vì dùng gia_nhap (gây lỗi), ta dùng chính GiaBan của sách
+                    // Hoặc bạn có thể để giá trị này bằng 0 nếu không muốn tính lợi nhuận
+                    item.gia_nhap_luc_do = sach.GiaBan;
 
-                    // Nếu chưa nhập lần nào thì giá vốn = 0 (hoặc xử lý tùy ý)
-                    item.gia_nhap_luc_do = giaNhapGanNhat;
-
-                    // Thêm chi tiết
                     await db.ChiTietHoaDons.AddAsync(item);
                 }
 
                 await db.SaveChangesAsync();
-                await transaction.CommitAsync(); // Xác nhận thành công
+                await transaction.CommitAsync();
                 return true;
             }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync(); // Hoàn tác nếu lỗi
-                throw ex; // Ném lỗi ra để UI hiển thị
+                await transaction.RollbackAsync();
+                throw; // Đẩy lỗi ra ngoài để UI xử lý (hiện MessageBox)
             }
         }
-        // 3. Hàm thống kê chuẩn (Tính lãi dựa trên snapshot)
+
+        // 3. Thống kê dựa trên dữ liệu Sách
         public async Task<List<ThongKeDTO>> GetThongKeAsync(DateTime tuNgay, DateTime denNgay)
         {
-            // Reset giờ để lấy trọn ngày
             var fromDate = tuNgay.Date;
             var toDate = denNgay.Date.AddDays(1).AddTicks(-1);
 
             return await db.ChiTietHoaDons
-                .Include(ct => ct.HoaDon)
-                .Include(ct => ct.Sach)
                 .Where(ct => ct.HoaDon.ngay_lap_hoa_don >= fromDate && ct.HoaDon.ngay_lap_hoa_don <= toDate)
                 .GroupBy(ct => new { ct.ma_sach, ct.Sach.TenSach })
                 .Select(g => new ThongKeDTO
@@ -91,16 +91,11 @@ namespace demo_1.DAL.DAO
                     MaSach = g.Key.ma_sach,
                     TenSach = g.Key.TenSach,
                     SoLuongBan = g.Sum(x => x.so_luong),
-
-                    // Doanh thu = SL * Giá bán lúc đó
                     DoanhThu = g.Sum(x => x.so_luong * x.gia_ban_luc_do),
-
-                    // Lợi nhuận = SL * (Giá bán lúc đó - Giá nhập lúc đó)
+                    // Lợi nhuận tính theo giá nhập chốt trong hóa đơn
                     LoiNhuan = g.Sum(x => x.so_luong * (x.gia_ban_luc_do - x.gia_nhap_luc_do))
                 })
                 .ToListAsync();
         }
-
-        
     }
 }

@@ -2,7 +2,6 @@
 using demo_1.BLL.Interfaces;
 using demo_1.DAL.DAO;
 using demo_1.DAL.Entity;
-using demo_1.Interfaces;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 

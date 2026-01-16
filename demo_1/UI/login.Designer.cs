@@ -1,4 +1,5 @@
-﻿namespace demo_1
+﻿using demo_1.DAL.Contexts;
+namespace demo_1
 {
     partial class login
     {
@@ -67,6 +68,7 @@
             txtPass.Name = "txtPass";
             txtPass.Size = new Size(214, 27);
             txtPass.TabIndex = 3;
+            txtPass.TextChanged += txtPass_TextChanged;
             // 
             // btnLogin
             // 

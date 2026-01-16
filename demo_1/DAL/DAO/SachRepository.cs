@@ -1,5 +1,4 @@
-﻿using demo_1.Entity;
-using Microsoft.EntityFrameworkCore; // Cần thêm namespace này để dùng .Include
+﻿using Microsoft.EntityFrameworkCore; // Cần thêm namespace này để dùng .Include
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;

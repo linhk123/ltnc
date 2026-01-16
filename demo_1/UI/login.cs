@@ -1,4 +1,4 @@
-﻿using demo_1.Contexts;
+﻿using demo_1.DAL.Contexts;
 using Microsoft.EntityFrameworkCore;
 namespace demo_1
 {
@@ -39,6 +39,11 @@ namespace demo_1
         }
 
         private void txtUser_TextChanged(object sender, EventArgs e)
+        {
+
+        }
+
+        private void txtPass_TextChanged(object sender, EventArgs e)
         {
 
         }

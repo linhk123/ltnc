@@ -1,7 +1,6 @@
 ﻿using demo_1.BLL.DTO;
 using demo_1.DAL.Contexts;
 using demo_1.DAL.Entity;
-using demo_1.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;

@@ -11,8 +11,7 @@ namespace demo_1.DAL.DAO
 {
     public class HoaDonRepository
     {
-        // Để tránh lỗi "A second operation was started...", nên dùng DbContext ngắn hạn 
-        // hoặc khởi tạo cẩn thận. Ở đây tôi giữ cấu trúc của bạn nhưng tối ưu logic.
+        
         private readonly NhaSachContext db = new NhaSachContext();
 
         public async Task<List<HoaDonDTO>> GetHoaDonsAsync()

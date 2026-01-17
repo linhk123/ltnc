@@ -32,6 +32,7 @@ namespace demo_1
         /// </summary>
         private void InitializeComponent()
         {
+            components = new System.ComponentModel.Container();
             sqlCommand1 = new Microsoft.Data.SqlClient.SqlCommand();
             tabPage6 = new TabPage();
             panel6 = new Panel();
@@ -69,6 +70,8 @@ namespace demo_1
             label6 = new Label();
             LoaddataType = new DataGridView();
             tabPage1 = new TabPage();
+            btnTimKiem = new Button();
+            txtTimKiem = new TextBox();
             panel1 = new Panel();
             cboLoaiSach = new ComboBox();
             txtGiaBan = new NumericUpDown();
@@ -85,6 +88,7 @@ namespace demo_1
             btnThem = new Button();
             LoaddataSach = new DataGridView();
             tabControl1 = new TabControl();
+            contextMenuStrip1 = new ContextMenuStrip(components);
             tabPage6.SuspendLayout();
             panel6.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)dgvSachSapHet).BeginInit();
@@ -144,6 +148,7 @@ namespace demo_1
             dgvSachSapHet.RowHeadersWidth = 51;
             dgvSachSapHet.Size = new Size(407, 174);
             dgvSachSapHet.TabIndex = 1;
+            dgvSachSapHet.CellContentClick += dgvSachSapHet_CellContentClick;
             // 
             // dgvTopSach
             // 
@@ -476,6 +481,8 @@ namespace demo_1
             // tabPage1
             // 
             tabPage1.AccessibleName = "tab1";
+            tabPage1.Controls.Add(btnTimKiem);
+            tabPage1.Controls.Add(txtTimKiem);
             tabPage1.Controls.Add(panel1);
             tabPage1.Controls.Add(LoaddataSach);
             tabPage1.Location = new Point(4, 29);
@@ -486,6 +493,25 @@ namespace demo_1
             tabPage1.Text = "Sách";
             tabPage1.UseVisualStyleBackColor = true;
             tabPage1.Click += tabPage1_Click;
+            // 
+            // btnTimKiem
+            // 
+            btnTimKiem.BackColor = Color.LightGray;
+            btnTimKiem.Location = new Point(881, 28);
+            btnTimKiem.Name = "btnTimKiem";
+            btnTimKiem.Size = new Size(127, 29);
+            btnTimKiem.TabIndex = 3;
+            btnTimKiem.Text = "Tìm kiếm";
+            btnTimKiem.UseVisualStyleBackColor = false;
+            btnTimKiem.Click += btnTimKiem_Click;
+            // 
+            // txtTimKiem
+            // 
+            txtTimKiem.Location = new Point(34, 28);
+            txtTimKiem.Name = "txtTimKiem";
+            txtTimKiem.Size = new Size(812, 27);
+            txtTimKiem.TabIndex = 2;
+            txtTimKiem.TextChanged += txtTimKiem_TextChanged;
             // 
             // panel1
             // 
@@ -628,10 +654,10 @@ namespace demo_1
             // LoaddataSach
             // 
             LoaddataSach.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            LoaddataSach.Location = new Point(33, 23);
+            LoaddataSach.Location = new Point(34, 81);
             LoaddataSach.Name = "LoaddataSach";
             LoaddataSach.RowHeadersWidth = 51;
-            LoaddataSach.Size = new Size(986, 266);
+            LoaddataSach.Size = new Size(986, 215);
             LoaddataSach.TabIndex = 1;
             LoaddataSach.CellContentClick += LoaddataSach_CellContentClick;
             // 
@@ -647,6 +673,12 @@ namespace demo_1
             tabControl1.SelectedIndex = 0;
             tabControl1.Size = new Size(1068, 568);
             tabControl1.TabIndex = 0;
+            // 
+            // contextMenuStrip1
+            // 
+            contextMenuStrip1.ImageScalingSize = new Size(20, 20);
+            contextMenuStrip1.Name = "contextMenuStrip1";
+            contextMenuStrip1.Size = new Size(61, 4);
             // 
             // Form1
             // 
@@ -675,6 +707,7 @@ namespace demo_1
             panel2.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)LoaddataType).EndInit();
             tabPage1.ResumeLayout(false);
+            tabPage1.PerformLayout();
             panel1.ResumeLayout(false);
             panel1.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)txtGiaBan).EndInit();
@@ -738,5 +771,8 @@ namespace demo_1
         private DateTimePicker dtpNgayThongKe;
         private DataGridView dgvSachSapHet;
         private DataGridView dgvTopSach;
+        private Button btnTimKiem;
+        private TextBox txtTimKiem;
+        private ContextMenuStrip contextMenuStrip1;
     }
 }

@@ -114,6 +114,20 @@ namespace demo_1.DAL.DAO
 
         public async Task<List<SachDTO>> Search(string keyword)
         {
+
+            using var db = new NhaSachContext();
+
+            // Nếu keyword rỗng, trả về tất cả sách
+            if (string.IsNullOrWhiteSpace(keyword))
+            {
+                return await db.Sachs
+                    .Include(s => s.LoaiSach)
+                    .Select(s => new SachDTO
+                    {
+                        // ... mapping data
+                    }).ToListAsync();
+            }
+
             var query = from sach in db.Sachs
                         join loaiSach in db.LoaiSachs on sach.MaLoaiSach equals loaiSach.MaLoaiSach
                         where sach.TenSach.Contains(keyword) ||
@@ -128,7 +142,8 @@ namespace demo_1.DAL.DAO
                             GiaBan = sach.GiaBan,
                             TenLoaiSach = loaiSach.TenLoaiSach
                         };
-            return await query.ToListAsync();
+
+            return await query.ToListAsync() ?? new List<SachDTO>();
         }
 
         public async Task<bool> Update(SachDTO sach)

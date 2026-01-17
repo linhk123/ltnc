@@ -9,7 +9,6 @@ namespace demo_1
 {
     public partial class Form1 : Form
     {
-        private decimal _tongTienNhapTam = 0;
         private NguoiDung _currentUser;
         private readonly ISachRepository _sachService;
         private readonly BindingSource _bs = new BindingSource();
@@ -25,7 +24,7 @@ namespace demo_1
         private readonly thongKeService _tkService = new thongKeService();
         public Form1(NguoiDung user)
         {
-            InitializeComponent(); // Để trống ngoặc này, không điền gì vào đây
+            InitializeComponent();
 
             // Khởi tạo service
             _sachService = new SachService();
@@ -42,7 +41,6 @@ namespace demo_1
             LoaddataType.MultiSelect = false;
             LoaddataType.SelectionChanged += LoaddataType_SelectionChanged;
             _hoaDonService = new HoaDonService();
-            // Gán user từ tham số vào biến private của class
             _currentUser = user;
             ApplyPhanQuyen();
 
@@ -58,15 +56,17 @@ namespace demo_1
         {
             try
             {
-                await LoadSachAsync();      // Đợi load sách xong
-                await LoadLoaiSachAsync();  // Rồi mới load loại sách
-                await FillComboSachHD();    // Rồi mới điền combo
+                await LoadSachAsync();
+                await LoadLoaiSachAsync();
+                await FillComboSachHD();
             }
             catch (Exception ex)
             {
                 MessageBox.Show("Lỗi khởi tạo: " + ex.Message);
             }
         }
+
+
         private void ApplyPhanQuyen()
         {
             this.Text = $"Nhà Sách - {_currentUser.HoTen} ({_currentUser.VaiTro})";
@@ -793,7 +793,7 @@ namespace demo_1
                 var data = await _tkService.GetThongKeByDateAsync(ngayChon);
 
                 // Gán dữ liệu lên UI
-                lblTongDoanhThu.Text = $"Tổng doanh thu: {data.TongDoanhThu:N0} VNĐ";
+                lblTongDoanhThu.Text = $"Tổng doanh thu: {data.TongDoanhThu * 1000:N0} VNĐ";
                 lblTongSoHD.Text = $"Tổng số hóa đơn: {data.TongSoHoaDon}";
                 lblTongSachBan.Text = $"Tổng số sách đã bán: {data.TongSoSachDaBan}";
 
@@ -804,6 +804,62 @@ namespace demo_1
             {
                 MessageBox.Show("Lỗi: " + ex.Message);
             }
+        }
+
+        private async void txtTimKiem_TextChanged(object sender, EventArgs e)
+        {
+            string keyword = txtTimKiem.Text.Trim();
+
+            try
+            {
+                // 1. Gọi hàm Search từ service
+                var ketQua = await _sachService.Search(keyword);
+
+                // 2. Cập nhật thông qua BindingSource để Grid tự làm mới
+                _bs.DataSource = ketQua;
+
+                // 3. Đảm bảo UI cập nhật ngay lập tức
+                _bs.ResetBindings(false);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Lỗi tìm kiếm: " + ex.Message);
+            }
+        }
+
+        private async void btnTimKiem_Click(object sender, EventArgs e)
+        {
+            string keyword = txtTimKiem.Text.Trim();
+
+            // Nếu người dùng nhấn nút khi ô trống, có thể hiện thông báo hoặc load lại tất cả
+            if (string.IsNullOrEmpty(keyword))
+            {
+                await LoadSachAsync(); // Gọi hàm load toàn bộ danh sách cũ của bạn
+                return;
+            }
+
+            try
+            {
+                // Thực hiện tìm kiếm khi nhấn nút
+                var ketQua = await _sachService.Search(keyword);
+
+                _bs.DataSource = ketQua;
+                _bs.ResetBindings(false);
+
+                if (ketQua.Count == 0)
+                {
+                    MessageBox.Show("Không tìm thấy sách phù hợp!");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Lỗi tìm kiếm: " + ex.Message);
+            }
+        }
+
+        private void dgvSachSapHet_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        {
+
         }
     }
 }
